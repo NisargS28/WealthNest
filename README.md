@@ -68,10 +68,9 @@ graph TD
 - **Monetary NAV Validation**: Validates transactions using monetary arithmetic: `abs(Amount - (Units * NAV)) <= 0.50 INR`.
 - **Portfolio Summary & Import Preview**: Summarizes detected funds, folios, and transaction classifications inside the output JSON.
 
-### 🚧 In Progress
 - **Portfolio Reconstruction Engine**: Transitioning raw, normalized transactions into state-tracked holdings, calculating cumulative invested amounts, and processing redemptions, switches, and reversals.
 
-### ⬜ Planned
+### 🚧 In Progress
 - **NAV API Integration**: Fetching real-time and historical NAVs via public feeds (e.g. MFapi.in) to evaluate current portfolio valuation.
 - **Family Portfolio Aggregator**: Creating family groups, assigning member ownership to folios, and calculating household asset allocation.
 - **Interactive UI Dashboard**: Rendering charts, timelines, asset allocation splits, and member-specific performance overviews.

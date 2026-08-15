@@ -1,6 +1,6 @@
 # Phase 02 — Portfolio Reconstruction Engine
 
-Status: **IN PROGRESS**
+Status: **COMPLETED**
 
 ## Objective
 Develop the core portfolio engine that takes normalized transaction history and reconstructs holding states, computing cumulative invested amounts, outstanding unit balances, and reconciling closing balances.

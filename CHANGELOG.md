@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.0] — 2026-08-15
+### Added
+- **Portfolio Reconstruction Engine**: Introduced a deterministic engine completely independent from the CAS parser.
+- **Folio Holdings**: Computes and reconciles the closing unit balance for every folio using strict Decimal arithmetic.
+- **Cash Flow Semantics**: Accurately tracks separate totals for `gross_purchases`, `gross_redemptions`, `gross_reversals`, `stamp_duty`, and computes a `net_cash_flow`. Reversals naturally subtract from running balances as signed by the parser.
+- **Scheme Aggregation**: Groups folios matching identical AMC and scheme names, aggregating their total units while preserving distinct folio structures underneath.
+- **Reconciliation Engine**: Validates unit balances against the CAS-stated balances with a rigid `0.005` tolerance, producing explicit `PASS`/`FAIL` markers.
+- **Comprehensive Testing**: Created 13+ unit and integration tests verifying purchase, redemption, switch, and stamp duty semantics, achieving 100% PASS on all folios from `CAS_01` and `CAS_02`.
+
+---
+
 ## [0.1.0] — 2026-08-15
 ### Added
 - **Core Ingestion PDF Engine**: Implemented `PdfReader` leveraging PyMuPDF for document parsing and metadata extraction, combined with `pdfplumber` for robust transaction table parsing.
