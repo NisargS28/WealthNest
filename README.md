@@ -70,8 +70,9 @@ graph TD
 
 - **Portfolio Reconstruction Engine**: Transitioning raw, normalized transactions into state-tracked holdings, calculating cumulative invested amounts, and processing redemptions, switches, and reversals.
 
+- **NAV API Integration**: Fetching real-time and historical NAVs via public feeds (MFapi.in) to evaluate current portfolio valuation. It features a robust fallback matching scheme (ISIN -> Exact Name -> Fuzzy) and a caching layer.
+
 ### 🚧 In Progress
-- **NAV API Integration**: Fetching real-time and historical NAVs via public feeds (e.g. MFapi.in) to evaluate current portfolio valuation.
 - **Family Portfolio Aggregator**: Creating family groups, assigning member ownership to folios, and calculating household asset allocation.
 - **Interactive UI Dashboard**: Rendering charts, timelines, asset allocation splits, and member-specific performance overviews.
 - **Security & Multi-user Auth**: Role-based access control, secure document processing, and encryption-at-rest strategies.

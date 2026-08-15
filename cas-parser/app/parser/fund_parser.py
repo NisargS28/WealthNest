@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 class FundParser:
     def __init__(self):
         self.folio_no_re = re.compile(r"Folio No[:\s]+([A-Z0-9/\s]+?)(?:\s+PAN:|\s+KYC:)")
-        self.isin_re = re.compile(r"ISIN:\s*([A-Z]{2}[A-Z0-9]{10})")
+        self.isin_re = re.compile(r"\b(IN[A-Z0-9]{10})\b")
         self.scheme_code_re = re.compile(r"^([A-Z0-9]+)-(.+?)\s*(?:\(Non.Demat\)|\(Demat\))")
         self.registrar_re = re.compile(r"Registrar\s*:\s*(CAMS|KFINTECH)", re.IGNORECASE)
         self.plan_re = re.compile(r"\b(Regular Plan|Direct Plan|Regular|Direct)\b", re.IGNORECASE)
@@ -100,17 +100,18 @@ class FundParser:
                 
         # Fallback scheme name if not matched by scheme_code_re
         if not scheme_name and isin:
-            for line_text, _ in lines:
-                if isin in line_text and "ISIN:" in line_text:
-                    parts = line_text.split(" - ISIN:")
-                    if parts:
-                        scheme_name = parts[0].strip()
-                        # try to strip scheme code if it's there
-                        if "-" in scheme_name:
-                            pot_code, pot_name = scheme_name.split("-", 1)
-                            if len(pot_code) <= 10 and pot_code.isalnum():
-                                scheme_name = pot_name.strip()
-                        break
+            for i, (line_text, _) in enumerate(lines):
+                if isin in line_text or "ISIN:" in line_text:
+                    # If the line has ' - ISIN:', use the part before it as scheme name
+                    if " - ISIN:" in line_text:
+                        parts = line_text.split(" - ISIN:")
+                        if parts:
+                            scheme_name = parts[0].strip()
+                            if "-" in scheme_name:
+                                pot_code, pot_name = scheme_name.split("-", 1)
+                                if len(pot_code) <= 10 and pot_code.isalnum():
+                                    scheme_name = pot_name.strip()
+                            break
                         
         if not scheme_name:
             # Another fallback: just look for the line before opening balance

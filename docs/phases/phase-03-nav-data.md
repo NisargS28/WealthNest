@@ -1,45 +1,52 @@
-# Phase 03 — NAV/Data Integration
-
-Status: **PLANNED**
+# Phase 03: NAV & Market Data Integration
 
 ## Objective
-Integrate external market data providers to fetch latest and historical Net Asset Value (NAV) details, mapping them to scheme codes and ISINs safely.
-
-## Why this phase exists
-To calculate current valuation, profit/loss, and portfolio analytics (XIRR/CAGR), we must merge the user's transaction cost basis with the latest active market valuations.
+Introduce an external data layer to retrieve real-time and historical Mutual Fund Net Asset Values (NAV). Integrate this data with the reconstructed portfolio to calculate the current market valuation without mutating the original transaction history.
 
 ## Scope
-- Integrate external NAV feeds (starting with planned source `MFapi.in`).
-- Implement scheme code mapping to ISIN/AMC nomenclature.
-- Fetch and cache NAV details locally to prevent rate limiting.
-- Gracefully handle API outages and missing data feeds.
+- Abstract provider interface for NAV retrieval.
+- Implementation of MFapi.in as the primary provider.
+- Scheme mapping system prioritizing ISIN over exact name/fuzzy matching.
+- Caching layer to eliminate duplicate API requests.
+- Valuation Engine to calculate `current_value` across all folios using Decimal arithmetic.
 
-## Tasks
-- [ ] Design the market data API client layer.
-- [ ] Build mapping registry linking CAS scheme strings/ISINs to MFapi scheme codes.
-- [ ] Implement caching mechanism for daily NAV.
-- [ ] Add fallback mechanism (e.g., utilize last reported CAS NAV if API is offline).
-- [ ] Write data fetcher unit tests.
+## Architecture
+The NAV Engine (`nav-engine/`) runs as a standalone CLI processing `portfolio_reconstructed.json`.
+- **`app/provider`**: `NAVProvider` abstract base class and `MFAPIProvider` implementation.
+- **`app/mapper`**: `SchemeMasterIndex` downloads the full list of Indian mutual funds and indexes them by ISIN and exact name. `SchemeMapper` maps CAS schemes to provider scheme codes.
+- **`app/cache`**: `NAVCache` caches API results to disk to avoid rate-limiting and redundant requests.
+- **`app/valuation`**: `ValuationEngine` executes the logic to fetch NAVs, calculate values, and assemble the final `portfolio_valued.json`.
 
-## Technical Design
-The NAV module will act as a separate, isolated data provider layer. The transaction database is the immutable truth; NAV data is fetched on demand and cached. 
-```
-Transaction Data (Truth) ──┐
-                           ├─► Valuation Calculator ─► Current Portfolio State
-External NAV Cache ────────┘
-```
+## Provider Design
+The system uses **MFapi.in** which requires no authentication and provides historical and latest NAV data updated 6 times a day. If MFapi needs to be replaced later, a new class inheriting from `NAVProvider` can be swapped into `main.py` without rewriting the mapping or valuation logic.
 
-## Input
-ISIN or scheme code from parsed transactions.
+## Scheme Mapping Strategy
+Schemes from the CAS are matched to the MFapi scheme database using the following priority:
+1. **ISIN**: Exact match using the 12-character identifier (e.g., `INF209K01LF3`).
+2. **Exact Name**: Matches the CAS scheme name precisely to the MFapi database.
+3. **API Search**: Uses the first 5 words of the scheme name to search via the API.
+4. **Fuzzy Matching**: Disambiguates search results using string similarity algorithms (requires >85% confidence).
 
-## Output
-Live or historical NAV (Decimal) for valuation calculation.
+Ambiguous matches (>60% but <85%) are flagged as `REQUIRES_REVIEW`.
 
-## Validation
-Confirm fetched valuations reconcile logically against the portfolio summary cost/market values in the statement metadata.
+## NAV Data Model
+All financial data is handled natively as Python `Decimal` objects.
+Output model is `ValuationResult`, producing a completely separate `portfolio_valued.json` state.
+The total `current_value` always includes all successfully mapped and fetched schemes.
 
-## Known Limitations
-`MFapi.in` is a free, public service in India and might suffer from rate limiting or downtime. The design must accommodate alternative providers (e.g., AMFI raw text scrapers or commercial feeds) without rewriting core logic.
+## Caching
+The engine stores a local `mfapi_master.json` which is refreshed every 24 hours. Individual NAV requests are cached in `nav_cache.json`. If an identical scheme request occurs within the same day, the cache serves the response, reducing API overhead.
 
-## Decisions
-- Treat external market data feeds as non-authoritative overlays; never write API values directly into historical transaction tables.
+## Data Freshness & Error Handling
+NAVs older than 5 calendar days are flagged as `STALE_DATA`.
+API errors or unmatched schemes are surfaced explicitly via `NAVStatus` (`SCHEME_UNMATCHED`, `API_ERROR`, `NAV_UNAVAILABLE`).
+Unavailable schemes do NOT default to `0` value. They are excluded from the `current_value` sum but tracked explicitly in the summary.
+
+## Completion Criteria
+- [x] ISIN parsing fix applied to CAS parser (Aditya Birla ISIN extraction).
+- [x] MFAPI integration complete and working.
+- [x] Caching and Indexing implemented.
+- [x] Valuation Engine deterministic execution.
+- [x] 19 Unit/Integration tests passing offline.
+- [x] Live provider API test isolated and passing.
+- [x] Valuation generated for `CAS_01` and `CAS_02`.

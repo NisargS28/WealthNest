@@ -157,3 +157,5 @@ cython_debug/
 cas-parser/output/
 output/
 .gemini/
+nav-engine/cache/
+nav-engine/output/

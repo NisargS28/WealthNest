@@ -7,7 +7,7 @@ This roadmap outlines the milestones for building a centralized family-level mut
 | **00** | **Project Foundation** | ✅ | 100% | Repository setup, testing setup, coding guidelines, CI foundations. |
 | **01** | **CAS PDF Ingestion Parser** | ✅ | 100% | Ingestion parser to extract statement metadata, folios, and financial transactions from CAMS/KFintech PDFs. |
 | **02** | **Portfolio Reconstruction Engine** | ✅ | 100% | Holdings logic computing closing units, invested amounts, redemptions, switches, and reversals. |
-| **03** | **NAV/Data Integration** | ⬜ | PLANNED | Integrate historical/realtime NAV APIs (such as MFapi.in) to evaluate current market valuations. |
+| **03** | **NAV/Data Integration** | ✅ | 100% | Integrate historical/realtime NAV APIs (such as MFapi.in) to evaluate current market valuations. |
 | **04** | **Import Preview & User Confirmation** | ⬜ | PLANNED | Web flow displaying extracted data, allowing verification and manual adjustments before committing. |
 | **05** | **Family Portfolio Model** | ⬜ | PLANNED | Multi-member grouping logic linking individual portfolios into aggregated family views. |
 | **06** | **Portfolio Analytics** | ⬜ | PLANNED | Computation of XIRR, CAGR, absolute returns, asset allocation concentration, and SIP trackers. |

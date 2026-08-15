@@ -27,7 +27,11 @@ requires = ["setuptools>=61.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "cas-parser/tests", "portfolio-engine/tests"]
+testpaths = [
+    "cas-parser/tests",
+    "portfolio-engine/tests",
+    "nav-engine/tests"
+]
 python_files = ["test_*.py"]
 
 [tool.black]

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.0] - 2026-08-15
+### Added
+- **NAV & Market Data Integration**: `nav-engine/` module added to integrate with MFapi.in.
+- **Scheme Mapping**: Advanced scheme matching prioritizing ISIN > Exact Name > Name Search > Fuzzy Matching.
+- **Valuation Engine**: Computes current market values using precise Decimal arithmetic.
+- **NAV Caching**: Prevents redundant API requests per scheme per day, preserving API boundaries.
+- **Testing**: Added unit, integration, and live provider tests for the valuation engine.
+
+### Fixed
+- **ISIN Extraction**: Updated CAS Parser regex (`fund_parser.py`) to correctly extract ISINs when placed on a separate newline (fixing Aditya Birla ISIN miss).
+
 ## [0.2.0] — 2026-08-15
 ### Added
 - **Portfolio Reconstruction Engine**: Introduced a deterministic engine completely independent from the CAS parser.
