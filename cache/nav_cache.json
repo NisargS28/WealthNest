@@ -1,0 +1,58 @@
+{
+  "mfapi:108167:2026-08-14": {
+    "provider": "mfapi",
+    "provider_scheme_code": 108167,
+    "nav": "137.94580",
+    "nav_date": "2026-08-14",
+    "fetched_at": "2026-08-16T00:08:28.014669"
+  },
+  "mfapi:108167:latest": {
+    "provider": "mfapi",
+    "provider_scheme_code": 108167,
+    "nav": "137.94580",
+    "nav_date": "2026-08-14",
+    "fetched_at": "2026-08-16T00:08:28.014669"
+  },
+  "mfapi:105503:2026-08-14": {
+    "provider": "mfapi",
+    "provider_scheme_code": 105503,
+    "nav": "199.03000",
+    "nav_date": "2026-08-14",
+    "fetched_at": "2026-08-16T00:08:28.061493"
+  },
+  "mfapi:105503:latest": {
+    "provider": "mfapi",
+    "provider_scheme_code": 105503,
+    "nav": "199.03000",
+    "nav_date": "2026-08-14",
+    "fetched_at": "2026-08-16T00:08:28.061493"
+  },
+  "mfapi:152232:2026-08-14": {
+    "provider": "mfapi",
+    "provider_scheme_code": 152232,
+    "nav": "16.90870",
+    "nav_date": "2026-08-14",
+    "fetched_at": "2026-08-16T00:08:28.107571"
+  },
+  "mfapi:152232:latest": {
+    "provider": "mfapi",
+    "provider_scheme_code": 152232,
+    "nav": "16.90870",
+    "nav_date": "2026-08-14",
+    "fetched_at": "2026-08-16T00:08:28.107571"
+  },
+  "mfapi:129647:2026-08-14": {
+    "provider": "mfapi",
+    "provider_scheme_code": 129647,
+    "nav": "59.86000",
+    "nav_date": "2026-08-14",
+    "fetched_at": "2026-08-16T00:08:28.154717"
+  },
+  "mfapi:129647:latest": {
+    "provider": "mfapi",
+    "provider_scheme_code": 129647,
+    "nav": "59.86000",
+    "nav_date": "2026-08-14",
+    "fetched_at": "2026-08-16T00:08:28.154717"
+  }
+}

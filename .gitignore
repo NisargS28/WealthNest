@@ -159,3 +159,8 @@ output/
 .gemini/
 nav-engine/cache/
 nav-engine/output/
+web-engine/data/
+web-engine/uploads/
+frontend/.next/
+frontend/node_modules/
+*.md
