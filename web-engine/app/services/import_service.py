@@ -220,16 +220,26 @@ class ImportService:
             scheme_map = {row[1]: row[0] for row in existing_schemes if row[1]}
             scheme_name_map = {row[2]: row[0] for row in existing_schemes}
             
-            # Fetch existing folios
-            cursor.execute("SELECT id, folio_number, scheme_id FROM public.folios;")
-            existing_folios = cursor.fetchall()
-            folio_map = {f"{row[1]}_{row[2]}": row[0] for row in existing_folios}
+            # Fetch existing folios for this portfolio
+            cursor.execute("""
+                SELECT f.id, f.folio_number, f.scheme_id 
+                FROM public.folios f
+                JOIN public.assets a ON f.asset_id = a.id
+                WHERE a.portfolio_id = %s;
+            """, (portfolio_id,))
+            existing_folios_for_portfolio = cursor.fetchall()
+            folio_map = {f"{row[1]}_{row[2]}": row[0] for row in existing_folios_for_portfolio}
+            existing_folio_numbers = {row[1] for row in existing_folios_for_portfolio}
             
             new_tx_values = []
             
             for row in import_txs:
                 (folio_number, scheme_name, isin, transaction_date, transaction_type, transaction_subtype, 
                  description, amount, units, nav, unit_balance, fingerprint) = row
+                 
+                # DUPLICATE CAS IMPORT RULE: Skip transactions if the folio already exists in this portfolio
+                if folio_number in existing_folio_numbers:
+                    continue
                  
                 if fingerprint not in existing_fps:
                     # 1. Resolve Scheme
@@ -322,6 +332,16 @@ class ImportService:
         funds = len(set(tx["scheme_name"] for tx in txs))
         folios = len(set(tx["folio_number"] for tx in txs))
         
+        # Fetch existing folios for duplicate risk
+        assets = self.supabase.table("assets").select("id").eq("portfolio_id", portfolio_id).execute().data
+        asset_ids = [a["id"] for a in assets]
+        existing_folios = set()
+        if asset_ids:
+            # We can use .in_() or fetch all and filter. Supabase python .in_ expects a list of strings/ints
+            # It's safer to fetch all folios and filter if we have a lot, or just use .in_
+            folios_res = self.supabase.table("folios").select("folio_number").in_("asset_id", asset_ids).execute().data
+            existing_folios = {f["folio_number"] for f in folios_res}
+        
         # Count types
         purchases = sum(1 for tx in txs if tx["transaction_type"] == "PURCHASE")
         redemptions = sum(1 for tx in txs if tx["transaction_type"] == "REDEMPTION")
@@ -387,6 +407,7 @@ class ImportService:
                     h["current_value"] = Decimal("0.0")
             
             # Format Decimal to float/str for json serialization
+            is_new = not any(f in existing_folios for f in h["folios"])
             holdings.append({
                 "scheme_name": h["scheme_name"],
                 "amc": h["amc"],
@@ -397,10 +418,14 @@ class ImportService:
                 "nav_date": h["nav_date"],
                 "current_value": float(h["current_value"]),
                 "nav_status": h["nav_status"],
-                "mapping_method": h["mapping_method"]
+                "mapping_method": h["mapping_method"],
+                "is_new_investment": is_new
             })
             
         total_value = sum(h["current_value"] for h in holdings)
+        
+        new_folios_count = sum(1 for h in holdings if h["is_new_investment"])
+        existing_folios_count = len(holdings) - new_folios_count
         
         return {
             "import_id": import_id,
@@ -411,6 +436,8 @@ class ImportService:
             "summary": {
                 "funds": funds,
                 "folios": folios,
+                "new_folios": new_folios_count,
+                "existing_folios": existing_folios_count,
                 "transactions": len(txs),
                 "total_current_value": total_value,
                 "nav_data_date": import_record[0].get("statement_end"),

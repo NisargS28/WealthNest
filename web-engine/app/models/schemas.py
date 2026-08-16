@@ -127,7 +127,7 @@ class PortfolioDetail(BaseModel):
     id: str
     member_id: str
     display_name: str
-    holdings: List[StoredHolding]
+    holdings: List['HoldingDetail']
     folios: List[StoredFolio]
     valuation: Optional[ValuationDetail] = None
 

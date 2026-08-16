@@ -25,9 +25,9 @@ export function Sidebar() {
           <LayoutDashboard size={18} />
           Dashboard
         </Link>
-        <Link href="/holdings" className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md hover:bg-accent text-muted-foreground hover:text-accent-foreground transition-colors">
+        <Link href="/portfolio" className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md hover:bg-accent text-muted-foreground hover:text-accent-foreground transition-colors">
           <PieChart size={18} />
-          Current Holdings
+          Portfolios
         </Link>
         <Link href="/transactions" className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md hover:bg-accent text-muted-foreground hover:text-accent-foreground transition-colors">
           <ArrowRightLeft size={18} />

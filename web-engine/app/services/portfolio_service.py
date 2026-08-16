@@ -42,13 +42,13 @@ class PortfolioService:
             
             if asset_ids:
                 # Get folio count
-                cursor.execute("SELECT id FROM public.folios WHERE asset_id = ANY(%s);", (asset_ids,))
+                cursor.execute("SELECT id FROM public.folios WHERE asset_id = ANY(%s::uuid[]);", (asset_ids,))
                 folio_ids = [row[0] for row in cursor.fetchall()]
                 folio_count = len(folio_ids)
                 
                 if folio_ids:
                     # Get transaction count
-                    cursor.execute("SELECT COUNT(*) FROM public.transactions WHERE folio_id = ANY(%s);", (folio_ids,))
+                    cursor.execute("SELECT COUNT(*) FROM public.transactions WHERE folio_id = ANY(%s::uuid[]);", (folio_ids,))
                     tx_count = cursor.fetchone()[0]
                     
             # Get latest valuation
@@ -111,13 +111,13 @@ class PortfolioService:
             
             if asset_ids:
                 # Get folio count
-                cursor.execute("SELECT id FROM public.folios WHERE asset_id = ANY(%s);", (asset_ids,))
+                cursor.execute("SELECT id FROM public.folios WHERE asset_id = ANY(%s::uuid[]);", (asset_ids,))
                 folio_ids = [row[0] for row in cursor.fetchall()]
                 folio_count = len(folio_ids)
                 
                 if folio_ids:
                     # Get transaction count
-                    cursor.execute("SELECT COUNT(*) FROM public.transactions WHERE folio_id = ANY(%s);", (folio_ids,))
+                    cursor.execute("SELECT COUNT(*) FROM public.transactions WHERE folio_id = ANY(%s::uuid[]);", (folio_ids,))
                     tx_count = cursor.fetchone()[0]
                     
             # Get latest valuation
@@ -174,7 +174,7 @@ class PortfolioService:
                 SELECT f.id, f.folio_number, s.amc_name, s.scheme_name, s.isin
                 FROM public.folios f
                 LEFT JOIN public.schemes s ON f.scheme_id = s.id
-                WHERE f.asset_id = ANY(%s);
+                WHERE f.asset_id = ANY(%s::uuid[]);
             """, (asset_ids,))
             folios_db = cursor.fetchall()
             
@@ -256,11 +256,15 @@ class PortfolioService:
         cursor.close()
         conn.close()
         
+        from app.services.aggregation_service import AggregationService
+        agg_svc = AggregationService(self.token)
+        rich_holdings = agg_svc.get_holdings(user_id=owner_user_id, portfolio_id=portfolio_id)
+        
         return PortfolioDetail(
             id=portfolio_id,
             member_id=owner_user_id or "",
             display_name=port_name,
-            holdings=val_detail.holdings if val_detail else [],
+            holdings=rich_holdings,
             folios=folios,
             valuation=val_detail
         )
@@ -278,7 +282,7 @@ class PortfolioService:
             return []
             
         # 2. Fetch folios
-        cursor.execute("SELECT id FROM public.folios WHERE asset_id = ANY(%s);", (asset_ids,))
+        cursor.execute("SELECT id FROM public.folios WHERE asset_id = ANY(%s::uuid[]);", (asset_ids,))
         folio_ids = [row[0] for row in cursor.fetchall()]
         if not folio_ids:
             cursor.close()
@@ -289,7 +293,7 @@ class PortfolioService:
         cursor.execute("""
             SELECT t.id, t.transaction_date, t.transaction_type, t.transaction_subtype, t.description, t.amount, t.units, t.nav, t.unit_balance
             FROM public.transactions t
-            WHERE t.folio_id = ANY(%s)
+            WHERE t.folio_id = ANY(%s::uuid[])
             ORDER BY t.transaction_date DESC;
         """, (folio_ids,))
         txs = cursor.fetchall()
@@ -333,3 +337,82 @@ class PortfolioService:
                 member_summaries=member_summaries
             )
         )
+
+    def delete_portfolio(self, portfolio_id: str, authenticated_user_id: str):
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # 1. Verify ownership
+            cursor.execute("SELECT owner_user_id FROM public.portfolios WHERE id = %s;", (portfolio_id,))
+            port = cursor.fetchone()
+            if not port:
+                raise ValueError("Portfolio not found")
+                
+            if port[0] != authenticated_user_id:
+                raise ValueError("Unauthorized to delete this portfolio")
+                
+            # 2. Get assets
+            cursor.execute("SELECT id FROM public.assets WHERE portfolio_id = %s;", (portfolio_id,))
+            asset_ids = [row[0] for row in cursor.fetchall()]
+            
+            # 3. Get folios
+            folio_ids = []
+            if asset_ids:
+                cursor.execute("SELECT id FROM public.folios WHERE asset_id = ANY(%s::uuid[]);", (asset_ids,))
+                folio_ids = [row[0] for row in cursor.fetchall()]
+                
+            # 4. Get imports
+            cursor.execute("SELECT id FROM public.imports WHERE portfolio_id = %s;", (portfolio_id,))
+            import_ids = [row[0] for row in cursor.fetchall()]
+            
+            # 5. Get valuations
+            cursor.execute("SELECT id FROM public.portfolio_valuations WHERE portfolio_id = %s;", (portfolio_id,))
+            valuation_ids = [row[0] for row in cursor.fetchall()]
+
+            # Execute Deletions (respecting foreign keys)
+            
+            # A. Delete import_transactions
+            if import_ids:
+                cursor.execute("DELETE FROM public.import_transactions WHERE import_id = ANY(%s::uuid[]);", (import_ids,))
+                
+            # B. Delete imports
+            cursor.execute("DELETE FROM public.imports WHERE portfolio_id = %s;", (portfolio_id,))
+            
+            # C. Delete portfolio_valuation_holdings
+            if valuation_ids:
+                cursor.execute("DELETE FROM public.portfolio_valuation_holdings WHERE valuation_id = ANY(%s::uuid[]);", (valuation_ids,))
+                
+            # D. Delete portfolio_valuations
+            cursor.execute("DELETE FROM public.portfolio_valuations WHERE portfolio_id = %s;", (portfolio_id,))
+            
+            # E. Delete SIP Occurrences and SIP Plans
+            if folio_ids:
+                cursor.execute("SELECT id FROM public.sip_plans WHERE folio_id = ANY(%s::uuid[]);", (folio_ids,))
+                sip_plan_ids = [row[0] for row in cursor.fetchall()]
+                if sip_plan_ids:
+                    cursor.execute("DELETE FROM public.sip_occurrences WHERE sip_plan_id = ANY(%s::uuid[]);", (sip_plan_ids,))
+                    cursor.execute("DELETE FROM public.sip_plans WHERE folio_id = ANY(%s::uuid[]);", (folio_ids,))
+            
+            # F. Delete transactions
+            if folio_ids:
+                cursor.execute("DELETE FROM public.transactions WHERE folio_id = ANY(%s::uuid[]);", (folio_ids,))
+                
+            # G. Delete folios
+            if asset_ids:
+                cursor.execute("DELETE FROM public.folios WHERE asset_id = ANY(%s::uuid[]);", (asset_ids,))
+                
+            # H. Delete assets
+            cursor.execute("DELETE FROM public.assets WHERE portfolio_id = %s;", (portfolio_id,))
+            
+            # I. Delete the portfolio itself
+            cursor.execute("DELETE FROM public.portfolios WHERE id = %s;", (portfolio_id,))
+            
+            conn.commit()
+            
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            cursor.close()
+            conn.close()

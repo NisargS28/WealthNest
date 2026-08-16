@@ -206,7 +206,10 @@ export default function ImportPage() {
                 </div>
                 <div className="p-4 rounded-lg bg-muted/30 border">
                   <p className="text-sm text-muted-foreground mb-1">Folios</p>
-                  <p className="text-2xl font-semibold">{preview.summary.folios}</p>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-2xl font-semibold">{preview.summary.folios}</p>
+                    <span className="text-xs text-muted-foreground">({preview.summary.new_folios} New, {preview.summary.existing_folios} Existing)</span>
+                  </div>
                 </div>
                 <div className="p-4 rounded-lg bg-muted/30 border">
                   <p className="text-sm text-muted-foreground mb-1">Transactions</p>
@@ -219,25 +222,33 @@ export default function ImportPage() {
               </div>
 
               <div>
-                <h3 className="text-lg font-medium mb-3">Detected Holdings (Grouped by Folio)</h3>
+                <h3 className="text-lg font-medium mb-3">Detected Assets (Grouped by Folio)</h3>
                 <div className="border rounded-md bg-card overflow-hidden">
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-muted/50">
                         <TableHead>Scheme</TableHead>
                         <TableHead>Folio</TableHead>
+                        <TableHead>Status</TableHead>
                         <TableHead className="text-right">Units</TableHead>
                         <TableHead className="text-right">Value</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {preview.holdings.map((h, i) => (
-                        <TableRow key={i} className="hover:bg-muted/30">
+                        <TableRow key={i} className={`hover:bg-muted/30 ${!h.is_new_investment ? 'opacity-70' : ''}`}>
                           <TableCell className="font-medium">{h.scheme_name}</TableCell>
                           <TableCell>
                             {h.folios.map(f => (
                               <Badge key={f} variant="outline" className="mr-1">{f}</Badge>
                             ))}
+                          </TableCell>
+                          <TableCell>
+                            {h.is_new_investment ? (
+                              <Badge className="bg-green-500/10 text-green-600 border-green-200">NEW INVESTMENT</Badge>
+                            ) : (
+                              <Badge variant="secondary" className="text-muted-foreground">ALREADY IMPORTED</Badge>
+                            )}
                           </TableCell>
                           <TableCell className="text-right">{Number(h.total_units).toFixed(3)}</TableCell>
                           <TableCell className="text-right font-medium">₹{Number(h.current_value).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</TableCell>

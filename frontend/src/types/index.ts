@@ -46,6 +46,8 @@ export interface ImportPreview {
 export interface ImportSummary {
   funds: number;
   folios: number;
+  new_folios: number;
+  existing_folios: number;
   transactions: number;
   total_current_value: string;
   nav_data_date: string | null;
@@ -73,6 +75,7 @@ export interface HoldingPreview {
   current_value: string | null;
   nav_status: NavStatus;
   mapping_method: string | null;
+  is_new_investment: boolean;
 }
 
 export interface ValidationSummary {
@@ -94,7 +97,7 @@ export interface PortfolioDetail {
   id: string;
   member_id: string;
   display_name: string;
-  holdings: StoredHolding[];
+  holdings: HoldingDetail[];
   folios: StoredFolio[];
   valuation: ValuationDetail | null;
 }

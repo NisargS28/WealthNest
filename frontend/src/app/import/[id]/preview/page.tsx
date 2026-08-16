@@ -186,7 +186,7 @@ export default function ImportPreviewPage({ params }: { params: { id: string } }
               {holdings.length === 0 && (
                 <tr>
                   <td colSpan={5} className="text-center text-secondary py-8">
-                    No holdings preview found.
+                    No assets preview found.
                   </td>
                 </tr>
               )}

@@ -1,9 +1,9 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { signout } from "@/app/actions/auth"
+import { useRouter } from "next/navigation"
 import { User, Mail, LogOut, Shield, Plus, Loader2, Users } from "lucide-react"
-import { getMembers, fetchWithAuth } from "@/lib/api"
+import { getMembers } from "@/lib/api"
 import { FamilyMember } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,6 +22,7 @@ export default function ProfilePage() {
   const [newMemberName, setNewMemberName] = useState("")
   const [isCreating, setIsCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
+  const router = useRouter()
 
   useEffect(() => {
     async function loadProfile() {
@@ -77,6 +78,17 @@ export default function ProfilePage() {
     }
   }
 
+  const handleSignOut = async () => {
+    try {
+      const supabase = createClient()
+      await supabase.auth.signOut()
+      router.push('/login')
+      router.refresh()
+    } catch (err: any) {
+      console.error("Logout failed", err)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
@@ -128,11 +140,9 @@ export default function ProfilePage() {
             </div>
           </CardContent>
           <CardFooter>
-            <form action={signout} className="w-full">
-              <Button type="submit" variant="outline" className="w-full text-red-500 hover:text-red-600 hover:bg-red-500/10 border-red-200 dark:border-red-500/30">
-                <LogOut size={18} className="mr-2" /> Sign Out
-              </Button>
-            </form>
+            <Button onClick={handleSignOut} variant="outline" className="w-full text-red-500 hover:text-red-600 hover:bg-red-500/10 border-red-200 dark:border-red-500/30">
+              <LogOut size={18} className="mr-2" /> Sign Out
+            </Button>
           </CardFooter>
         </Card>
 

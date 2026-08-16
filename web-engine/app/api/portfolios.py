@@ -50,3 +50,24 @@ def refresh_nav(portfolio_id: str, token: Optional[str] = Depends(get_auth_token
     port_svc = PortfolioService(token)
     port = port_svc.get_portfolio(portfolio_id)
     return port.valuation
+
+@router.delete("/portfolio/{portfolio_id}")
+def delete_portfolio(portfolio_id: str, token: Optional[str] = Depends(get_auth_token)):
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing authorization token")
+    
+    svc = PortfolioService(token)
+    try:
+        user = svc.supabase.auth.get_user(token)
+        if not user or not user.user:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        authenticated_user_id = user.user.id
+        svc.delete_portfolio(portfolio_id, authenticated_user_id)
+        return {"status": "success", "message": "Portfolio deleted successfully"}
+    except ValueError as e:
+        if str(e) == "Unauthorized to delete this portfolio":
+            raise HTTPException(status_code=403, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete portfolio: {str(e)}")
