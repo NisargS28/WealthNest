@@ -311,9 +311,138 @@ class ImportService:
             except Exception as val_ex:
                 logger.error(f"Failed to refresh valuation on confirm: {str(val_ex)}")
             
+            # Detect and create SIP plans from confirmed transactions
+            try:
+                _detect_and_create_sip_plans(portfolio_id, user_id=None)
+            except Exception as sip_ex:
+                logger.error(f"Failed to detect SIP plans: {str(sip_ex)}")
+            
         cursor.close()
         conn.close()
         return portfolio_id
+
+
+def _detect_and_create_sip_plans(portfolio_id: str, user_id: str = None):
+    """
+    Scans confirmed transactions for SIP patterns per folio and creates sip_plans + notifications.
+    Uses the most-common day-of-month across all SIP instalments as the canonical SIP day.
+    """
+    from collections import Counter
+    from datetime import date, timedelta
+    import calendar
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # Fetch all folios for this portfolio
+        cursor.execute("""
+            SELECT f.id AS folio_id, f.folio_number, s.scheme_name, s.id AS scheme_id, a.id AS asset_id
+            FROM public.folios f
+            JOIN public.assets a ON f.asset_id = a.id
+            JOIN public.schemes s ON f.scheme_id = s.id
+            WHERE a.portfolio_id = %s
+        """, (portfolio_id,))
+        folios = cursor.fetchall()
+        
+        for folio_id, folio_number, scheme_name, scheme_id, asset_id in folios:
+            # Check if sip_plan already exists for this folio
+            cursor.execute("SELECT id FROM public.sip_plans WHERE folio_id = %s LIMIT 1", (folio_id,))
+            if cursor.fetchone():
+                continue  # Already processed
+            
+            # Fetch all SIP transactions for this folio
+            cursor.execute("""
+                SELECT transaction_date, amount
+                FROM public.transactions
+                WHERE folio_id = %s
+                  AND (description ILIKE '%%SIP%%' OR description ILIKE '%%Systematic%%')
+                  AND transaction_type IN ('PURCHASE', 'BUY')
+                ORDER BY transaction_date ASC
+            """, (folio_id,))
+            sip_txs = cursor.fetchall()
+            
+            if not sip_txs:
+                continue  # No SIP transactions for this folio
+            
+            # Find the most common day-of-month
+            days = [tx[0].day for tx in sip_txs]
+            day_counter = Counter(days)
+            sip_day = day_counter.most_common(1)[0][0]
+            
+            # Amount: most common amount
+            amounts = [tx[1] for tx in sip_txs if tx[1] is not None]
+            if not amounts:
+                continue
+            amount_counter = Counter([float(a) for a in amounts])
+            sip_amount = Decimal(str(amount_counter.most_common(1)[0][0]))
+            
+            start_date = sip_txs[0][0]  # Earliest SIP date
+            last_sip_date = sip_txs[-1][0]  # Most recent SIP date
+            
+            # Compute next_expected_date: find next occurrence of sip_day from today
+            today = date.today()
+            if today.day <= sip_day:
+                # Still this month
+                try:
+                    next_expected = today.replace(day=sip_day)
+                except ValueError:
+                    # Day doesn't exist in this month (e.g. day 31 in April)
+                    last_day = calendar.monthrange(today.year, today.month)[1]
+                    next_expected = today.replace(day=last_day)
+            else:
+                # Move to next month
+                if today.month == 12:
+                    next_month_year, next_month = today.year + 1, 1
+                else:
+                    next_month_year, next_month = today.year, today.month + 1
+                try:
+                    next_expected = date(next_month_year, next_month, sip_day)
+                except ValueError:
+                    last_day = calendar.monthrange(next_month_year, next_month)[1]
+                    next_expected = date(next_month_year, next_month, last_day)
+            
+            # Insert sip_plan
+            cursor.execute("""
+                INSERT INTO public.sip_plans
+                    (portfolio_id, folio_id, scheme_id, amount, frequency, sip_day, start_date, next_expected_date, status)
+                VALUES (%s, %s, %s, %s, 'MONTHLY', %s, %s, %s, 'PENDING_CONFIRMATION')
+                RETURNING id
+            """, (portfolio_id, folio_id, scheme_id, sip_amount, sip_day, start_date, next_expected))
+            sip_plan_id = cursor.fetchone()[0]
+            conn.commit()
+            
+            # Resolve user_id from portfolio if not provided
+            effective_user_id = user_id
+            if not effective_user_id:
+                cursor.execute("SELECT owner_user_id FROM public.portfolios WHERE id = %s", (portfolio_id,))
+                row = cursor.fetchone()
+                effective_user_id = row[0] if row else None
+            
+            if not effective_user_id:
+                continue
+            
+            # Insert notification
+            cursor.execute("""
+                INSERT INTO public.notifications
+                    (user_id, type, title, message, entity_type, entity_id, status)
+                VALUES (%s, 'SIP_PLAN_DETECTED', %s, %s, 'sip_plan', %s, 'UNREAD')
+            """, (
+                effective_user_id,
+                f"SIP Detected: {scheme_name}",
+                f"\u20b9{sip_amount:,.0f} SIP detected on day {sip_day} of every month. Please confirm or adjust the date.",
+                sip_plan_id
+            ))
+            conn.commit()
+            logger.info(f"[SIP Detect] Created sip_plan for folio {folio_number} ({scheme_name}), day={sip_day}, amount=\u20b9{sip_amount}")
+        
+    except Exception as e:
+        logger.error(f"[SIP Detect] Error: {e}")
+        if conn:
+            conn.rollback()
+    finally:
+        cursor.close()
+        conn.close()
 
     def get_preview(self, import_id: str) -> dict:
         import_record = self.supabase.table("imports").select("*").eq("id", import_id).execute().data

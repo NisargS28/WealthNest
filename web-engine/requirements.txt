@@ -6,3 +6,4 @@ pydantic>=2.0.0
 requests>=2.31.0
 casparser
 supabase
+apscheduler>=3.10.0

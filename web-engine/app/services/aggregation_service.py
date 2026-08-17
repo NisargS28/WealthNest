@@ -80,7 +80,7 @@ class AggregationService:
 
             # Get transactions for this folio to calculate invested and current units
             cursor.execute("""
-                SELECT transaction_type, amount, units
+                SELECT transaction_type, amount, units, transaction_date, description
                 FROM public.transactions
                 WHERE folio_id = %s
             """, (f_id,))
@@ -88,48 +88,127 @@ class AggregationService:
             
             invested = Decimal(0)
             total_units = Decimal(0)
-            for tx_type, amount, units in txs:
-                tx_type_upper = (tx_type or "").upper()
-                if tx_type_upper in ['PURCHASE', 'BUY', 'SWITCH_IN', 'SWITCHIN']:
-                    invested += Decimal(str(amount or 0))
-                    total_units += Decimal(str(units or 0))
-                elif tx_type_upper in ['REDEMPTION', 'SELL', 'SWITCH_OUT', 'SWITCHOUT']:
-                    # We subtract redemption amount from the invested principal
-                    invested -= Decimal(str(amount or 0))
-                    total_units -= Decimal(str(units or 0))
-                elif tx_type_upper in ['DIVIDEND_REINVEST', 'REINVEST']:
-                    # Reinvested dividend adds units but not external capital cash outflow
-                    total_units += Decimal(str(units or 0))
-                elif tx_type_upper == 'REVERSAL':
-                    # Reversals cancel out purchase units and amount
-                    invested -= Decimal(str(amount or 0))
-                    total_units -= Decimal(str(units or 0))
+            invested_since = None
+            has_sip = False
+            has_lumpsum = False
             
-            # Fetch latest NAV for this asset
+            for tx_type, amount, units, tx_date, desc in txs:
+                tx_type_upper = (tx_type or "").upper()
+                desc_upper = (desc or "").upper()
+                amt = Decimal(str(amount or 0))
+                unt = Decimal(str(units or 0))
+                
+                if tx_type_upper in ['PURCHASE', 'BUY', 'LUMPSUM', 'SWITCH_IN', 'SWITCHIN']:
+                    if 'SIP' in desc_upper or 'SYSTEMATIC' in desc_upper:
+                        has_sip = True
+                    else:
+                        has_lumpsum = True
+                
+                if tx_type_upper in ['PURCHASE', 'BUY', 'SWITCH_IN', 'SWITCHIN', 'SIP']:
+                    invested += amt
+                    total_units += unt
+                    # Keep track of earliest purchase date for invested_since
+                    if tx_date:
+                        if invested_since is None or tx_date < invested_since:
+                            invested_since = tx_date
+                elif tx_type_upper in ['REDEMPTION', 'SELL', 'SWITCH_OUT', 'SWITCHOUT']:
+                    # Use average cost basis for redemptions
+                    old_units = total_units
+                    total_units -= unt
+                    if total_units <= 0:
+                        invested = Decimal(0)
+                        total_units = Decimal(0)
+                    elif old_units > 0:
+                        avg_cost = invested / old_units
+                        invested -= unt * avg_cost
+                elif tx_type_upper in ['DIVIDEND_REINVEST', 'REINVEST']:
+                    # Reinvested dividend adds units and capital
+                    invested += amt
+                    total_units += unt
+                elif tx_type_upper == 'REVERSAL':
+                    invested -= amt
+                    total_units -= unt
+                    if total_units <= 0:
+                        invested = Decimal(0)
+                        total_units = Decimal(0)
+            
+            # Fetch latest 2 NAVs for this asset from valuation history
             cursor.execute("""
                 SELECT nav, market_value, nav_date 
                 FROM public.portfolio_valuation_holdings vh
                 JOIN public.portfolio_valuations v ON vh.valuation_id = v.id
                 WHERE vh.asset_id = %s
                 ORDER BY v.created_at DESC
-                LIMIT 1
+                LIMIT 2
             """, (a_id,))
-            val_data = cursor.fetchone()
+            val_data = cursor.fetchall()
             
             nav = Decimal(0)
             current_value = Decimal(0)
             nav_date = None
+            one_day_change = None
+            one_day_change_percent = None
             
-            if val_data:
-                nav = Decimal(str(val_data[0] or 0))
+            if val_data and len(val_data) > 0:
+                latest_val = val_data[0]
+                nav = Decimal(str(latest_val[0] or 0))
                 # The market_value in valuation is for the whole asset. 
                 # If there are multiple folios per asset, we calculate it:
                 current_value = total_units * nav
-                nav_date = val_data[2]
+                nav_date = latest_val[2]
+                
+                if len(val_data) > 1:
+                    prev_val = val_data[1]
+                    prev_nav = Decimal(str(prev_val[0] or 0))
+                    if prev_nav > 0:
+                        one_day_change_percent = ((nav - prev_nav) / prev_nav) * Decimal(100)
+                        one_day_change = total_units * (nav - prev_nav)
             
             returns = Decimal(0)
             if invested > 0:
                 returns = ((current_value - invested) / invested) * Decimal(100)
+                
+            investment_type = "Unknown"
+            if has_sip and has_lumpsum:
+                investment_type = "SIP & Lumpsum"
+            elif has_sip:
+                investment_type = "SIP"
+            elif has_lumpsum or invested > 0:
+                investment_type = "Lumpsum"
+            
+            # Fetch SIP plan for this folio (if any)
+            sip_plan_id = None
+            sip_day = None
+            sip_amount = None
+            last_sip_date = None
+            next_sip_date = None
+            sip_status = None
+            
+            cursor.execute("""
+                SELECT sp.id, sp.sip_day, sp.amount, sp.next_expected_date, sp.status
+                FROM public.sip_plans sp
+                WHERE sp.folio_id = %s
+                LIMIT 1
+            """, (f_id,))
+            sip_row = cursor.fetchone()
+            if sip_row:
+                sip_plan_id = str(sip_row[0])
+                sip_day = sip_row[1]
+                sip_amount = Decimal(str(sip_row[2])) if sip_row[2] else None
+                next_sip_date = sip_row[3]
+                sip_status = sip_row[4]
+                
+                # Last SIP transaction date
+                cursor.execute("""
+                    SELECT MAX(transaction_date)
+                    FROM public.transactions
+                    WHERE folio_id = %s
+                      AND (description ILIKE '%%SIP%%' OR description ILIKE '%%Systematic%%')
+                      AND transaction_type IN ('PURCHASE', 'BUY')
+                """, (f_id,))
+                last_row = cursor.fetchone()
+                if last_row and last_row[0]:
+                    last_sip_date = last_row[0]
                 
             holdings.append(HoldingDetail(
                 id=f_id,
@@ -142,7 +221,17 @@ class AggregationService:
                 returns=returns,
                 nav=nav,
                 units=total_units,
-                nav_date=nav_date
+                nav_date=nav_date,
+                invested_since=invested_since,
+                one_day_change=one_day_change,
+                one_day_change_percent=one_day_change_percent,
+                investment_type=investment_type,
+                sip_plan_id=sip_plan_id,
+                sip_day=sip_day,
+                sip_amount=sip_amount,
+                last_sip_date=last_sip_date,
+                next_sip_date=next_sip_date,
+                sip_status=sip_status
             ))
             
         cursor.close()
@@ -159,18 +248,56 @@ class AggregationService:
         holdings = self.get_holdings(user_id)
         
         # Calculate total invested and value from holdings
+        portfolio_invested_since = None
         for h in holdings:
             total_invested += h.invested
             total_value += h.current_value
+            
+            if h.invested_since:
+                if portfolio_invested_since is None or h.invested_since < portfolio_invested_since:
+                    portfolio_invested_since = h.invested_since
             
         profit_loss = total_value - total_invested
         profit_percentage = Decimal(0)
         if total_invested > 0:
             profit_percentage = (profit_loss / total_invested) * Decimal(100)
             
-        # Recent transactions
+        one_day_change = Decimal(0)
+        one_day_change_percent = Decimal(0)
+        last_updated_date = None
+        
         conn = get_db_connection()
         cursor = conn.cursor()
+        
+        if port_ids:
+            # Fetch the latest 1-day change across portfolios
+            cursor.execute("""
+                SELECT SUM(one_day_change), MAX(valuation_date)
+                FROM (
+                    SELECT portfolio_id, one_day_change, valuation_date
+                    FROM (
+                        SELECT portfolio_id, one_day_change, valuation_date,
+                               ROW_NUMBER() OVER(PARTITION BY portfolio_id ORDER BY valuation_date DESC, created_at DESC) as rn
+                        FROM public.portfolio_valuations
+                        WHERE portfolio_id = ANY(%s::uuid[])
+                    ) sub
+                    WHERE rn = 1
+                ) latest_vals
+            """, (port_ids,))
+            
+            res = cursor.fetchone()
+            if res:
+                if res[0] is not None:
+                    one_day_change = Decimal(str(res[0]))
+                if res[1] is not None:
+                    last_updated_date = res[1]
+                    
+            if one_day_change and total_value > 0:
+                adjusted_prev_value = total_value - one_day_change
+                if adjusted_prev_value > 0:
+                    one_day_change_percent = (one_day_change / adjusted_prev_value) * Decimal("100.0")
+                    
+        # Recent transactions
         
         recent_txs = []
         if port_ids:
@@ -232,6 +359,10 @@ class AggregationService:
             total_invested=total_invested,
             profit_loss=profit_loss,
             profit_percentage=profit_percentage,
+            one_day_change=one_day_change if one_day_change else None,
+            one_day_change_percent=one_day_change_percent if one_day_change_percent else None,
+            last_updated_date=last_updated_date,
+            invested_since=portfolio_invested_since,
             portfolio_count=len(port_ids),
             recent_transactions=recent_txs,
             top_holdings=top_holdings,

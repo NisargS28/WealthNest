@@ -97,12 +97,52 @@ export default function PortfolioPage({ params }: { params: { id: string } }) {
   const unrealisedAbs = totalValue - investedValue;
   const unrealisedPct = investedValue > 0 ? (unrealisedAbs / investedValue) * 100 : 0;
   
+  let earliestDate: Date | null = null;
+  for (const h of portfolio.holdings) {
+    if (h.invested_since) {
+      const d = new Date(h.invested_since);
+      if (!earliestDate || d < earliestDate) {
+        earliestDate = d;
+      }
+    }
+  }
+
+  let holdingSinceStr = "N/A";
+  if (earliestDate) {
+    holdingSinceStr = earliestDate.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+    const now = new Date();
+    let years = now.getFullYear() - earliestDate.getFullYear();
+    let months = now.getMonth() - earliestDate.getMonth();
+    if (months < 0) {
+      years--;
+      months += 12;
+    }
+    if (years > 0) {
+      holdingSinceStr += ` • ${years}y ${months}m`;
+    } else if (months > 0) {
+      holdingSinceStr += ` • ${months}m`;
+    }
+  }
+  
   // Mock totals
   const mock1DAbsolute = 1405;
   const mock1DPercent = 0.55;
   const mockRealisedAbs = 10618;
   const mockRealisedPct = 4.88;
   const mockXirr = 17.07;
+  
+  // Aggregate 1D change
+  let total1DAbsolute = 0;
+  let has1DData = false;
+  for (const h of portfolio.holdings) {
+    if (h.one_day_change != null) {
+      total1DAbsolute += parseFloat(h.one_day_change);
+      has1DData = true;
+    }
+  }
+  const prevTotalValue = totalValue - total1DAbsolute;
+  const total1DPercent = (has1DData && prevTotalValue > 0) ? (total1DAbsolute / prevTotalValue) * 100 : 0;
+  const is1DProfit = total1DAbsolute >= 0;
 
   return (
     <div className="container max-w-6xl animate-fade-in py-8">
@@ -120,9 +160,15 @@ export default function PortfolioPage({ params }: { params: { id: string } }) {
           <div className="text-5xl font-bold text-white/90 mb-2">
             ₹{totalValue.toLocaleString('en-IN', {maximumFractionDigits: 0})}
           </div>
-          <div className="text-sm font-semibold text-green-500">
-            ▲ ₹{mock1DAbsolute.toLocaleString('en-IN')} (+{mock1DPercent}%) today
-          </div>
+          {has1DData ? (
+            <div className={`text-sm font-semibold ${is1DProfit ? 'text-green-500' : 'text-red-500'}`}>
+              {is1DProfit ? '▲' : '▼'} ₹{Math.abs(total1DAbsolute).toLocaleString('en-IN', {maximumFractionDigits: 0})} ({is1DProfit ? '+' : '-'}{Math.abs(total1DPercent).toFixed(2)}%) today
+            </div>
+          ) : (
+            <div className="text-sm font-semibold text-secondary">
+              - ₹0 (0.00%) today
+            </div>
+          )}
         </div>
 
         <div className="flex flex-col gap-4 items-end">
@@ -158,7 +204,7 @@ export default function PortfolioPage({ params }: { params: { id: string } }) {
       </div>
 
       {/* SUMMARY ROW */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 py-6 border-y border-white/10 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 py-6 border-y border-white/10 mb-8">
         <div>
           <div className="text-xs font-semibold text-secondary uppercase tracking-widest mb-1">
             Invested Value
@@ -169,18 +215,10 @@ export default function PortfolioPage({ params }: { params: { id: string } }) {
         </div>
         <div>
           <div className="text-xs font-semibold text-secondary uppercase tracking-widest mb-1">
-            Unrealised P&L
+            Profit / Loss
           </div>
           <div className={`font-semibold text-base ${unrealisedAbs >= 0 ? 'text-green-500' : 'text-red-500'}`}>
             ₹{Math.abs(unrealisedAbs).toLocaleString('en-IN', {maximumFractionDigits: 0})} ({unrealisedAbs >= 0 ? '+' : '-'}{Math.abs(unrealisedPct).toFixed(2)}%)
-          </div>
-        </div>
-        <div>
-          <div className="text-xs font-semibold text-secondary uppercase tracking-widest mb-1 flex items-center gap-1">
-            Realised P&L <ChevronDown size={12} className="text-secondary" />
-          </div>
-          <div className="font-semibold text-base text-green-500">
-            ₹{mockRealisedAbs.toLocaleString('en-IN')} (+{mockRealisedPct}%)
           </div>
         </div>
         <div>
@@ -189,14 +227,6 @@ export default function PortfolioPage({ params }: { params: { id: string } }) {
           </div>
           <div className="font-semibold text-base text-green-500">
             {mockXirr}%
-          </div>
-        </div>
-        <div className="text-right md:text-left">
-          <div className="text-xs font-semibold text-secondary uppercase tracking-widest mb-1">
-            Holding Since
-          </div>
-          <div className="font-semibold text-base text-white/90">
-            Jun 2022 • 4y 2m
           </div>
         </div>
       </div>

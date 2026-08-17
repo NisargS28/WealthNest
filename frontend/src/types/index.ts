@@ -164,6 +164,38 @@ export interface HoldingDetail {
   nav: string;
   units: string;
   nav_date: string | null;
+  invested_since: string | null;
+  one_day_change: string | null;
+  one_day_change_percent: string | null;
+  investment_type: string;
+  sip_plan_id: string | null;
+  sip_day: number | null;
+  sip_amount: string | null;
+  last_sip_date: string | null;
+  next_sip_date: string | null;
+  sip_status: string | null;
+}
+
+export interface Notification {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  status: "UNREAD" | "READ";
+  created_at: string;
+  // SIP plan fields (SIP_PLAN_DETECTED)
+  sip_day: number | null;
+  sip_amount: number | null;
+  frequency: string | null;
+  next_expected_date: string | null;
+  sip_status: string | null;
+  scheme_name: string | null;
+  // SIP occurrence fields (SIP_CONFIRMATION)
+  occurrence_expected_date: string | null;
+  occurrence_amount: number | null;
+  occurrence_status: string | null;
 }
 
 export interface AssetAllocation {
@@ -183,6 +215,10 @@ export interface DashboardResponse {
   total_invested: string;
   profit_loss: string;
   profit_percentage: string;
+  one_day_change: string | null;
+  one_day_change_percent: string | null;
+  last_updated_date: string | null;
+  invested_since: string | null;
   portfolio_count: number;
   recent_transactions: Transaction[];
   top_holdings: HoldingDetail[];

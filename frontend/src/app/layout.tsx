@@ -5,9 +5,10 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Sidebar } from "@/components/sidebar";
-import { Bell, Settings, User } from "lucide-react";
+import { Settings, User } from "lucide-react";
 import Link from "next/link";
-import { ModeToggle } from "@/components/mode-toggle"; // we need to create this
+import { ModeToggle } from "@/components/mode-toggle";
+import NotificationBell from "@/components/NotificationBell";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -44,10 +45,7 @@ export default async function RootLayout({
                   </div>
                   <div className="flex items-center gap-4">
                     <ModeToggle />
-                    <button className="relative p-2 text-muted-foreground hover:text-foreground transition-colors rounded-full hover:bg-accent">
-                      <Bell size={18} />
-                      <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
-                    </button>
+                    <NotificationBell />
                     <Link href="/settings" className="p-2 text-muted-foreground hover:text-foreground transition-colors rounded-full hover:bg-accent">
                       <Settings size={18} />
                     </Link>

@@ -173,6 +173,17 @@ class HoldingDetail(BaseModel):
     nav: Decimal
     units: Decimal
     nav_date: Optional[date] = None
+    invested_since: Optional[date] = None
+    one_day_change: Optional[Decimal] = None
+    one_day_change_percent: Optional[Decimal] = None
+    investment_type: str = "Unknown"
+    # SIP plan details (populated if the folio has a SIP plan)
+    sip_plan_id: Optional[str] = None
+    sip_day: Optional[int] = None
+    sip_amount: Optional[Decimal] = None
+    last_sip_date: Optional[date] = None
+    next_sip_date: Optional[date] = None
+    sip_status: Optional[str] = None
 
 class AssetAllocation(BaseModel):
     name: str
@@ -189,6 +200,10 @@ class DashboardResponse(BaseModel):
     total_invested: Decimal
     profit_loss: Decimal
     profit_percentage: Decimal
+    one_day_change: Optional[Decimal] = None
+    one_day_change_percent: Optional[Decimal] = None
+    last_updated_date: Optional[date] = None
+    invested_since: Optional[date] = None
     portfolio_count: int
     recent_transactions: List[TransactionView]
     top_holdings: List[HoldingDetail]
